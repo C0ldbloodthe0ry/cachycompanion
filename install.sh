@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Install CachyMonitor as a per-user systemd service.
+set -euo pipefail
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
+[ -f "$DIR/config.json" ] || cp "$DIR/config.example.json" "$DIR/config.json"
+
+command -v python3 >/dev/null || { echo "python3 missing"; exit 1; }
+python3 -c "import psutil" 2>/dev/null || {
+  echo ">> installing psutil"; sudo pacman -S --noconfirm python-psutil; }
+
+mkdir -p "$HOME/.config/systemd/user"
+ln -sf "$DIR/cachymonitor.service" "$HOME/.config/systemd/user/cachymonitor.service"
+systemctl --user daemon-reload
+systemctl --user enable --now cachymonitor.service
+sleep 1
+systemctl --user --no-pager status cachymonitor.service | head -6
+echo
+echo ">> health:"; curl -s "http://127.0.0.1:$(python3 -c "import json;print(json.load(open('$DIR/config.json'))['port'])")/api/health"; echo
+echo ">> Edit token/port in: $DIR/config.json  then: systemctl --user restart cachymonitor"
