@@ -9,7 +9,8 @@ the Android app (`net.wokeovis.cachymonitor`) shows graphs and lets you kill PC 
 ```bash
 cd ~/cachymonitor
 ./install.sh          # copies config.example.json -> config.json if missing,
-                       # installs psutil if needed, enables the user service
+                       # installs psutil if needed, enables the user service,
+                       # adds "CachyMonitor App Installer" to your app menu
 ```
 
 Edit `config.json` (**set a real `token`**, it ships as `CHANGE-ME-cachymon`) then `systemctl --user restart cachymonitor`:
@@ -31,7 +32,12 @@ Edit `config.json` (**set a real `token`**, it ships as `CHANGE-ME-cachymon`) th
 GPU stats come from amdgpu sysfs (auto-detected); CPU temp from k10temp/zenpower.
 
 ## Phone connection
-- **USB:** `adb reverse tcp:5565 tcp:5565`, then point the app at `127.0.0.1:5565`.
+- **App menu (recommended):** `install.sh` adds a **"CachyMonitor App Installer"** entry under System.
+  Plug the phone in with USB debugging on and run it — it installs `adb`/USB permissions on first
+  run if they're missing (asks for `sudo` once), then installs `cachymonitor.apk`, opens the USB
+  tunnel, and launches the app.
+- **Manual USB:** `adb install -r cachymonitor.apk && adb reverse tcp:5565 tcp:5565`, then point the
+  app at `127.0.0.1:5565`.
 - **Wi-Fi (same LAN):** point the app at `<pc-ip>:5565`. Do **not** port-forward it.
 
 Security: the daemon binds LAN-only by default and every control call needs the token. Keep it off the WAN.

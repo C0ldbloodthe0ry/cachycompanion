@@ -18,3 +18,19 @@ systemctl --user --no-pager status cachymonitor.service | head -6
 echo
 echo ">> health:"; curl -s "http://127.0.0.1:$(python3 -c "import json;print(json.load(open('$DIR/config.json'))['port'])")/api/health"; echo
 echo ">> Edit token/port in: $DIR/config.json  then: systemctl --user restart cachymonitor"
+
+mkdir -p "$HOME/.local/share/applications"
+cat > "$HOME/.local/share/applications/CachyMonitor-App-Installer.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=CachyMonitor App Installer
+Comment=Install/update the CachyMonitor Android app on a phone plugged in via USB debugging
+Exec=$DIR/phone-connect.sh
+Icon=phone
+Terminal=true
+Categories=System;
+EOF
+chmod +x "$DIR/phone-connect.sh"
+update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
+echo ">> 'CachyMonitor App Installer' added to your app menu (System category)"

@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
-# Plug in the Pixel (USB debugging ON + authorized), then run this:
+# Plug in the phone (USB debugging ON + authorized), then run this:
 #   installs/updates the app, opens the USB tunnel, launches it.
 # Auto-selects the physical phone, ignoring any offline emulator.
 set -e
-APK=/home/zero/apkproject/releases/cachymonitor.apk
+DIR="$(cd "$(dirname "$0")" && pwd)"
+APK="$DIR/cachymonitor.apk"
+
+# Fresh CachyOS installs don't ship adb or the udev rules that let a
+# non-root user touch the phone over USB. Bootstrap both on first run.
+if ! command -v adb >/dev/null 2>&1 || ! pacman -Qq android-udev >/dev/null 2>&1; then
+  echo ">> first-time setup: installing adb + USB device permissions (needs your sudo password)"
+  sudo pacman -S --needed --noconfirm android-tools android-udev
+  sudo udevadm control --reload-rules
+  sudo udevadm trigger
+  hash -r
+fi
 
 adb start-server >/dev/null 2>&1 || true
 # pick the first real device in 'device' state that isn't an emulator
@@ -22,7 +33,14 @@ fi
 export ANDROID_SERIAL="$TARGET"
 echo ">> target: $ANDROID_SERIAL"
 
-echo ">> installing"; adb install -r "$APK" | tail -1
+echo ">> installing"
+if ! adb install -r "$APK" 2>&1 | tail -1 | grep -q Success; then
+  echo ">> signature mismatch or bad state, reinstalling clean"
+  adb uninstall net.wokeovis.cachymonitor >/dev/null 2>&1 || true
+  adb install "$APK" | tail -1
+fi
 echo ">> USB tunnel: phone 127.0.0.1:5565 -> PC 5565"; adb reverse tcp:5565 tcp:5565
 echo ">> launching"; adb shell monkey -p net.wokeovis.cachymonitor -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
 echo ">> done. In the app, tap USB (127.0.0.1:5565). Default token: CHANGE-ME-cachymon"
+read -n 1 -s -r -p "Press any key to close..." || true
+echo
