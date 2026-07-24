@@ -5,7 +5,8 @@ Serves a JSON stats snapshot and a token-gated process-kill endpoint over LAN / 
 
 Endpoints:
   GET  /api/health                 -> {"ok": true, "host": "..."}              (no token)
-  GET  /api/stats                  -> full snapshot (cpu/gpu/mem/procs)        (token)
+  GET  /api/stats                  -> full snapshot (cpu/gpu/mem/top procs)    (token)
+  GET  /api/procs?q=<substring>    -> every process matching name/pid, capped  (token)
   POST /api/kill   {"pid":N,"hard":false}                                      (token)
 
 Auth: header  X-CachyMon-Token: <token from config.json>
@@ -17,6 +18,7 @@ import signal
 import socket
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit, parse_qs
 
 try:
     import psutil
@@ -209,6 +211,44 @@ def read_procs(n):
     return rows[:n]
 
 
+def read_all_procs(query=None, cap=500):
+    """Every running process, optionally filtered by name/pid substring. Sorted by name."""
+    now = time.time()
+    ncpu = psutil.cpu_count() or 1
+    q = (query or "").strip().lower()
+    rows, seen = [], set()
+    for p in psutil.process_iter(["pid", "name", "memory_info", "cpu_times"]):
+        try:
+            info = p.info
+            pid = info["pid"]
+            seen.add(pid)
+            name = info["name"] or "?"
+            if q and q not in name.lower() and q != str(pid):
+                continue
+            ct = info["cpu_times"]
+            tot = (ct.user + ct.system) if ct else 0.0
+            cpu = 0.0
+            prev = _proc_cache.get(pid)
+            if prev:
+                dt = now - prev[1]
+                if dt > 0:
+                    cpu = max(0.0, (tot - prev[0]) / dt / ncpu * 100.0)
+            _proc_cache[pid] = (tot, now)
+            mem = info["memory_info"]
+            rows.append({
+                "pid": pid,
+                "name": name,
+                "cpu_pct": round(cpu, 1),
+                "mem_mb": int(mem.rss / 1024 / 1024) if mem else 0,
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    for pid in [p for p in _proc_cache if p not in seen]:
+        del _proc_cache[pid]
+    rows.sort(key=lambda x: x["name"].lower())
+    return rows[:cap]
+
+
 # ---------- HTTP ----------
 
 class Handler(BaseHTTPRequestHandler):
@@ -253,6 +293,12 @@ class Handler(BaseHTTPRequestHandler):
                 "gpu": read_gpu(self.gpu_dev),
                 "procs": read_procs(self.cfg["process_count"]),
             })
+        if self.path == "/api/procs" or self.path.startswith("/api/procs?"):
+            if not self._authed():
+                return self._send(401, {"error": "bad token"})
+            q = parse_qs(urlsplit(self.path).query).get("q", [""])[0]
+            rows = read_all_procs(q)
+            return self._send(200, {"ts": int(time.time()), "count": len(rows), "procs": rows})
         return self._send(404, {"error": "not found"})
 
     def do_POST(self):
