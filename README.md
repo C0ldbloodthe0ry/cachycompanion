@@ -10,11 +10,11 @@ the Android app (`net.wokeovis.cachymonitor`) shows graphs and lets you kill PC 
 cd ~/cachymonitor
 ./install.sh          # copies config.example.json -> config.json if missing,
                        # installs psutil if needed, enables the user service,
-                       # adds "CachyMonitor App Installer" to your app menu
+                       # installs the `cachymonitor-manager` command + app menu entry
 ```
 
 The `token` in `config.json` starts as the placeholder `CHANGE-ME-cachymon`. You normally don't need to
-edit it by hand — `phone-connect.sh` (below) generates a fresh one and pushes it to both the daemon and
+edit it by hand — `cachymonitor-manager` (below) generates a fresh one and pushes it to both the daemon and
 the phone automatically. Other keys:
 
 | key | meaning |
@@ -35,16 +35,32 @@ the phone automatically. Other keys:
 GPU stats come from amdgpu sysfs (auto-detected); CPU temp from k10temp/zenpower.
 
 ## Phone connection
-- **App menu (recommended):** `install.sh` adds a **"CachyMonitor App Installer"** entry under System.
-  Plug the phone in with USB debugging on and run it — it installs `adb`/USB permissions and `qrencode`
-  on first run if they're missing (asks for `sudo` once), then installs `cachymonitor.apk`, opens the USB
-  tunnel, generates a fresh token and writes it into `config.json`, restarts the daemon, and pops up a QR
-  code of the token. In the app, tap the **📷 camera button** next to the token field and scan it — no
-  typing required. The raw token is also printed in the terminal as a manual-entry fallback.
-- **Manual USB:** `adb install -r cachymonitor.apk && adb reverse tcp:5565 tcp:5565`, then point the
-  app at `127.0.0.1:5565` and enter the token from `config.json`.
-- **Wi-Fi (same LAN):** point the app at `<pc-ip>:5565`. Do **not** port-forward it.
+
+`install.sh` puts a `cachymonitor-manager` command on your `PATH` (`~/.local/bin`) and a matching
+**"CachyMonitorManager"** entry under System in your app menu — same tool, either launch path. No
+argument opens an interactive menu; it also takes a subcommand directly, which is the friendlier form
+over SSH on a headless box:
+
+```bash
+cachymonitor-manager push     # install/update the app on a USB-connected phone, then pair it
+cachymonitor-manager token    # just generate a fresh pairing token (no phone/adb needed)
+```
+
+Either path writes a fresh token into `config.json`, restarts the daemon, and prints the token as a QR
+code made of plain black/white terminal characters (`qrencode -t ANSIUTF8`, bootstrapped on first run) —
+no image viewer or GUI required, so it renders the same over SSH as it does at the desktop. In the app,
+tap the **📷 camera button** next to the token field and scan it; the raw token is also printed as a
+manual-entry fallback.
+
+- **`push`:** installs `adb`/USB udev rules on first run if missing (asks for `sudo` once), installs/updates
+  `cachymonitor.apk` on the first physical device adb sees, opens `adb reverse tcp:5565 tcp:5565`, then
+  runs the token/QR step above and launches the app.
+- **`token`:** use this when the app is already installed and you just need a new pairing — reconnecting
+  over Wi-Fi, or after the token rotated. Point the app at `<pc-ip>:5565` for LAN, or `127.0.0.1:5565` if
+  reusing an existing USB tunnel.
+- **Manual USB (no script):** `adb install -r cachymonitor.apk && adb reverse tcp:5565 tcp:5565`, then
+  enter the token from `config.json` by hand.
 
 Security: the daemon binds LAN-only by default and every control call needs the token. Keep it off the WAN.
-Note the token rotates every time `phone-connect.sh` runs, so any other client using the old one (a second
-phone, a saved bookmark) will need to be re-paired.
+The token rotates every time `cachymonitor-manager` generates one, so any other client using the old one
+(a second phone, a saved bookmark) will need to be re-paired.
