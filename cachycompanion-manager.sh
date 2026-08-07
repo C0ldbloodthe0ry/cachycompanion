@@ -8,6 +8,7 @@
 #   cachycompanion-manager           interactive menu
 #   cachycompanion-manager push      install/update the app on a USB phone, then pair it
 #   cachycompanion-manager token     generate + show a pairing token (no phone/adb needed)
+#   cachycompanion-manager port <N>  change the daemon's listening port
 set -e
 # Resolve through the ~/.local/bin symlink installed by install.sh so this
 # still finds its APK/config next to itself when invoked as a bare command.
@@ -17,11 +18,40 @@ CONFIG="$DIR/config.json"
 
 [ -f "$CONFIG" ] || cp "$DIR/config.example.json" "$CONFIG"
 
+current_port() {
+  python3 -c "import json;print(json.load(open('$CONFIG'))['port'])"
+}
+
 usage() {
-  echo "Usage: cachycompanion-manager [push|token]"
-  echo "  push   install/update the app on a USB-connected phone, then pair it"
-  echo "  token  generate a fresh pairing token and show its QR (no phone/adb needed)"
+  echo "Usage: cachycompanion-manager [push|token|port <N>]"
+  echo "  push     install/update the app on a USB-connected phone, then pair it"
+  echo "  token    generate a fresh pairing token and show its QR (no phone/adb needed)"
+  echo "  port <N> change the daemon's listening port (default 5565)"
   echo "  (no argument) interactive menu"
+}
+
+set_port() {
+  local new_port="$1"
+  case "$new_port" in
+    ''|*[!0-9]*) echo "!! port must be a number"; exit 1 ;;
+  esac
+  if [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
+    echo "!! port must be between 1 and 65535"; exit 1
+  fi
+  python3 - "$CONFIG" "$new_port" <<'PYEOF'
+import json, sys
+path, port = sys.argv[1], int(sys.argv[2])
+with open(path) as f:
+    cfg = json.load(f)
+cfg["port"] = port
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PYEOF
+  systemctl --user restart cachycompanion
+  sleep 1
+  echo ">> daemon now listening on :$new_port"
+  echo ">> run 'cachycompanion-manager token' (or 'push') next so the phone re-pairs on the new port"
 }
 
 ensure_qrencode() {
@@ -47,11 +77,13 @@ with open(path, "w") as f:
 PYEOF
   systemctl --user restart cachycompanion
   sleep 1
+  PORT="$(current_port)"
   echo
-  qrencode -t ANSIUTF8 -m 2 "$TOKEN"
+  qrencode -t ANSIUTF8 -m 2 "${TOKEN}@${PORT}"
   echo
-  echo ">> In the app: tap the camera button next to the token field and scan the code above."
-  echo ">> token (fallback for manual entry): $TOKEN"
+  echo ">> In the app: tap the QR button next to the token field and scan the code above."
+  echo "   (the code carries both the token and port :$PORT — the app fills in both fields)"
+  echo ">> manual-entry fallback — token: $TOKEN   port: $PORT"
 }
 
 push_to_phone() {
@@ -88,12 +120,13 @@ push_to_phone() {
     adb uninstall net.wokeovis.cachycompanion >/dev/null 2>&1 || true
     adb install "$APK" | tail -1
   fi
-  echo ">> USB tunnel: phone 127.0.0.1:5565 -> PC 5565"; adb reverse tcp:5565 tcp:5565
+  PORT="$(current_port)"
+  echo ">> USB tunnel: phone 127.0.0.1:$PORT -> PC $PORT"; adb reverse "tcp:$PORT" "tcp:$PORT"
 
   gen_token_and_show_qr
 
   echo ">> launching"; adb shell monkey -p net.wokeovis.cachycompanion -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
-  echo ">> done. In the app, tap USB (127.0.0.1:5565) if host/port didn't autofill."
+  echo ">> done. In the app, tap USB (127.0.0.1:$PORT) if host/port didn't autofill."
 }
 
 case "${1:-}" in
@@ -103,18 +136,25 @@ case "${1:-}" in
   token)
     gen_token_and_show_qr
     ;;
+  port)
+    [ -n "${2:-}" ] || { echo "!! usage: cachycompanion-manager port <N>"; exit 1; }
+    set_port "$2"
+    ;;
   -h|--help)
     usage
     ;;
   "")
     echo "=== CachyCompanionManager ==="
+    echo "current port: $(current_port)"
     echo "1) Push app to phone (enable USB debugging first, then plug it in)"
     echo "2) Generate QR token only (app already installed, pairing over LAN or reusing USB)"
-    echo "3) Quit"
+    echo "3) Set a custom port"
+    echo "4) Quit"
     read -r -p "> " choice
     case "$choice" in
       1) push_to_phone ;;
       2) gen_token_and_show_qr ;;
+      3) read -r -p "new port: " newport; set_port "$newport" ;;
       *) exit 0 ;;
     esac
     read -n 1 -s -r -p "Press any key to close..." || true
