@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CachyMonitor daemon  -  lightweight system-monitor + remote task-manager for CachyOS.
+CachyCompanion daemon  -  lightweight system-monitor + remote task-manager for CachyOS.
 Serves a JSON stats snapshot and a token-gated process-kill endpoint over LAN / USB(adb reverse).
 
 Endpoints:
@@ -23,7 +23,7 @@ from urllib.parse import urlsplit, parse_qs
 try:
     import psutil
 except ImportError:
-    raise SystemExit("CachyMonitor needs psutil:  sudo pacman -S python-psutil")
+    raise SystemExit("CachyCompanion needs psutil:  sudo pacman -S python-psutil")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "config.json")
@@ -340,7 +340,7 @@ def main():
     psutil.cpu_percent(interval=None)
     psutil.cpu_percent(interval=None, percpu=True)
     srv = ThreadingHTTPServer((cfg["bind"], cfg["port"]), Handler)
-    print(f"CachyMonitor on {cfg['bind']}:{cfg['port']}  host={cfg['hostname']}  "
+    print(f"CachyCompanion on {cfg['bind']}:{cfg['port']}  host={cfg['hostname']}  "
           f"gpu={'yes' if Handler.gpu_dev else 'none'}  lan_only={cfg['lan_only']}")
     try:
         srv.serve_forever()

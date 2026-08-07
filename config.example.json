@@ -1,5 +1,5 @@
 {
-  "_comment": "CachyMonitor daemon config. Edit then: systemctl --user restart cachymonitor",
+  "_comment": "CachyCompanion daemon config. Edit then: systemctl --user restart cachycompanion",
   "bind": "0.0.0.0",
   "port": 5565,
   "token": "CHANGE-ME-cachymon",

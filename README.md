@@ -1,20 +1,20 @@
-# CachyMonitor
+# CachyCompanion
 
 Lightweight system monitor + remote task-manager for **CachyOS** (and most AMD Linux boxes).
 A tiny Python daemon serves live CPU/GPU/RAM stats and a token-gated process-kill endpoint;
-the Android app (`net.wokeovis.cachymonitor`) shows graphs and lets you kill PC processes from your phone.
+the Android app (`net.wokeovis.cachycompanion`) shows graphs and lets you kill PC processes from your phone.
 
 ## Daemon
 
 ```bash
-cd ~/cachymonitor
+cd ~/cachycompanion
 ./install.sh          # copies config.example.json -> config.json if missing,
                        # installs psutil if needed, enables the user service,
-                       # installs the `cachymonitor-manager` command + app menu entry
+                       # installs the `cachycompanion-manager` command + app menu entry
 ```
 
 The `token` in `config.json` starts as the placeholder `CHANGE-ME-cachymon`. You normally don't need to
-edit it by hand — `cachymonitor-manager` (below) generates a fresh one and pushes it to both the daemon and
+edit it by hand — `cachycompanion-manager` (below) generates a fresh one and pushes it to both the daemon and
 the phone automatically. Other keys:
 
 | key | meaning |
@@ -36,14 +36,14 @@ GPU stats come from amdgpu sysfs (auto-detected); CPU temp from k10temp/zenpower
 
 ## Phone connection
 
-`install.sh` puts a `cachymonitor-manager` command on your `PATH` (`~/.local/bin`) and a matching
-**"CachyMonitorManager"** entry under System in your app menu — same tool, either launch path. No
+`install.sh` puts a `cachycompanion-manager` command on your `PATH` (`~/.local/bin`) and a matching
+**"CachyCompanionManager"** entry under System in your app menu — same tool, either launch path. No
 argument opens an interactive menu; it also takes a subcommand directly, which is the friendlier form
 over SSH on a headless box:
 
 ```bash
-cachymonitor-manager push     # install/update the app on a USB-connected phone, then pair it
-cachymonitor-manager token    # just generate a fresh pairing token (no phone/adb needed)
+cachycompanion-manager push     # install/update the app on a USB-connected phone, then pair it
+cachycompanion-manager token    # just generate a fresh pairing token (no phone/adb needed)
 ```
 
 Either path writes a fresh token into `config.json`, restarts the daemon, and prints the token as a QR
@@ -53,14 +53,14 @@ tap the **📷 camera button** next to the token field and scan it; the raw toke
 manual-entry fallback.
 
 - **`push`:** installs `adb`/USB udev rules on first run if missing (asks for `sudo` once), installs/updates
-  `cachymonitor.apk` on the first physical device adb sees, opens `adb reverse tcp:5565 tcp:5565`, then
+  `cachycompanion.apk` on the first physical device adb sees, opens `adb reverse tcp:5565 tcp:5565`, then
   runs the token/QR step above and launches the app.
 - **`token`:** use this when the app is already installed and you just need a new pairing — reconnecting
   over Wi-Fi, or after the token rotated. Point the app at `<pc-ip>:5565` for LAN, or `127.0.0.1:5565` if
   reusing an existing USB tunnel.
-- **Manual USB (no script):** `adb install -r cachymonitor.apk && adb reverse tcp:5565 tcp:5565`, then
+- **Manual USB (no script):** `adb install -r cachycompanion.apk && adb reverse tcp:5565 tcp:5565`, then
   enter the token from `config.json` by hand.
 
 Security: the daemon binds LAN-only by default and every control call needs the token. Keep it off the WAN.
-The token rotates every time `cachymonitor-manager` generates one, so any other client using the old one
+The token rotates every time `cachycompanion-manager` generates one, so any other client using the old one
 (a second phone, a saved bookmark) will need to be re-paired.

@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# CachyMonitorManager — push the Android app to a USB-connected phone
+# CachyCompanionManager — push the Android app to a USB-connected phone
 # and/or generate a fresh QR pairing token for the daemon. Works over
 # SSH on a headless box too: the QR renders as plain black/white
 # terminal characters, no GUI or image viewer needed.
 #
 # Usage:
-#   cachymonitor-manager           interactive menu
-#   cachymonitor-manager push      install/update the app on a USB phone, then pair it
-#   cachymonitor-manager token     generate + show a pairing token (no phone/adb needed)
+#   cachycompanion-manager           interactive menu
+#   cachycompanion-manager push      install/update the app on a USB phone, then pair it
+#   cachycompanion-manager token     generate + show a pairing token (no phone/adb needed)
 set -e
 # Resolve through the ~/.local/bin symlink installed by install.sh so this
 # still finds its APK/config next to itself when invoked as a bare command.
 DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-APK="$DIR/cachymonitor.apk"
+APK="$DIR/cachycompanion.apk"
 CONFIG="$DIR/config.json"
 
 [ -f "$CONFIG" ] || cp "$DIR/config.example.json" "$CONFIG"
 
 usage() {
-  echo "Usage: cachymonitor-manager [push|token]"
+  echo "Usage: cachycompanion-manager [push|token]"
   echo "  push   install/update the app on a USB-connected phone, then pair it"
   echo "  token  generate a fresh pairing token and show its QR (no phone/adb needed)"
   echo "  (no argument) interactive menu"
@@ -45,7 +45,7 @@ with open(path, "w") as f:
     json.dump(cfg, f, indent=2)
     f.write("\n")
 PYEOF
-  systemctl --user restart cachymonitor
+  systemctl --user restart cachycompanion
   sleep 1
   echo
   qrencode -t ANSIUTF8 -m 2 "$TOKEN"
@@ -85,14 +85,14 @@ push_to_phone() {
   echo ">> installing"
   if ! adb install -r "$APK" 2>&1 | tail -1 | grep -q Success; then
     echo ">> signature mismatch or bad state, reinstalling clean"
-    adb uninstall net.wokeovis.cachymonitor >/dev/null 2>&1 || true
+    adb uninstall net.wokeovis.cachycompanion >/dev/null 2>&1 || true
     adb install "$APK" | tail -1
   fi
   echo ">> USB tunnel: phone 127.0.0.1:5565 -> PC 5565"; adb reverse tcp:5565 tcp:5565
 
   gen_token_and_show_qr
 
-  echo ">> launching"; adb shell monkey -p net.wokeovis.cachymonitor -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+  echo ">> launching"; adb shell monkey -p net.wokeovis.cachycompanion -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
   echo ">> done. In the app, tap USB (127.0.0.1:5565) if host/port didn't autofill."
 }
 
@@ -107,7 +107,7 @@ case "${1:-}" in
     usage
     ;;
   "")
-    echo "=== CachyMonitorManager ==="
+    echo "=== CachyCompanionManager ==="
     echo "1) Push app to phone (enable USB debugging first, then plug it in)"
     echo "2) Generate QR token only (app already installed, pairing over LAN or reusing USB)"
     echo "3) Quit"
