@@ -13,10 +13,22 @@ set -e
 # Resolve through the ~/.local/bin symlink installed by install.sh so this
 # still finds its APK/config next to itself when invoked as a bare command.
 DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-APK="$DIR/cachycompanion.apk"
-CONFIG="$DIR/config.json"
 
-[ -f "$CONFIG" ] || cp "$DIR/config.example.json" "$CONFIG"
+# Self-contained installs (install.sh's ~/cachycompanion layout) keep the APK
+# and config.example.json next to this script. A distro package installs this
+# script to /usr/bin and the read-only data files under /usr/share instead.
+SYSTEM_SHARE="/usr/share/cachycompanion"
+if [ -f "$DIR/cachycompanion.apk" ]; then
+  APK="$DIR/cachycompanion.apk"
+  EXAMPLE="$DIR/config.example.json"
+  CONFIG="$DIR/config.json"
+else
+  APK="$SYSTEM_SHARE/cachycompanion.apk"
+  EXAMPLE="$SYSTEM_SHARE/config.example.json"
+  CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/cachycompanion/config.json"
+fi
+
+[ -f "$CONFIG" ] || { mkdir -p "$(dirname "$CONFIG")"; cp "$EXAMPLE" "$CONFIG"; }
 
 current_port() {
   python3 -c "import json;print(json.load(open('$CONFIG'))['port'])"
@@ -87,7 +99,7 @@ PYEOF
 }
 
 push_to_phone() {
-  # Fresh CachyOS installs don't ship adb or the udev rules that let a
+  # Fresh Arch-based installs don't ship adb or the udev rules that let a
   # non-root user touch the phone over USB. Bootstrap both on first run.
   if ! command -v adb >/dev/null 2>&1 || ! pacman -Qq android-udev >/dev/null 2>&1; then
     echo ">> first-time setup: installing adb + USB device permissions (needs your sudo password)"

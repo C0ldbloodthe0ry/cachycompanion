@@ -1,8 +1,16 @@
 # CachyCompanion
 
-Lightweight system monitor + remote task-manager for **CachyOS** (and most AMD Linux boxes).
+Lightweight system monitor + remote task-manager for **Arch Linux and derivatives**
+(CachyOS, EndeavourOS, Manjaro, plain Arch, ...) and most other systemd Linux boxes.
 A tiny Python daemon serves live CPU/GPU/RAM stats and a token-gated process-kill endpoint;
 the Android app (`net.wokeovis.cachycompanion`) shows graphs and lets you kill PC processes from your phone.
+
+**Hardware support:** AMD is what this is actually developed and daily-driven on (Ryzen +
+amdgpu). CPU-side, Intel is also covered — `psutil` and the temp-sensor lookup (`coretemp`)
+are already vendor-generic. GPU-side, Intel (i915/xe sysfs) and NVIDIA (`nvidia-smi`) support
+also exists but is **unverified** — written from public driver/tool documentation only, with
+no Intel or NVIDIA hardware available to test against. If you hit a bug on either, please open
+an issue (or a PR) — that feedback is the only way those paths get hardened.
 
 ## Daemon
 
@@ -32,7 +40,10 @@ the phone automatically. Other keys:
 - `GET /api/procs?q=<substring>` — token; every process whose name or pid matches (all of them if `q` is empty), for finding a small process that doesn't make the top list
 - `POST /api/kill` `{"pid":N,"hard":false}` — token; SIGTERM (or SIGKILL if `hard`)
 
-GPU stats come from amdgpu sysfs (auto-detected); CPU temp from k10temp/zenpower.
+GPU is auto-detected by PCI vendor ID: AMD and Intel read from sysfs (amdgpu / i915-xe),
+NVIDIA shells out to `nvidia-smi` if it's on PATH (see the hardware-support note above —
+Intel and NVIDIA are unverified). CPU temp comes from `k10temp`/`zenpower` (AMD) or
+`coretemp` (Intel), whichever `psutil` finds.
 
 ## Phone connection
 
@@ -69,3 +80,20 @@ fallback.
 Security: the daemon binds LAN-only by default and every control call needs the token. Keep it off the WAN.
 The token rotates every time `cachycompanion-manager` generates one, so any other client using the old one
 (a second phone, a saved bookmark) will need to be re-paired.
+
+## Packaging (AUR)
+
+A `PKGBUILD` is included (`cachycompanion-git`, tracks this repo's `master`). It installs the
+daemon read-only under `/usr/lib/cachycompanion`, the manager script to `/usr/bin`, and a
+`/usr/lib/systemd/user/cachycompanion.service` unit — `cachycompanion.py` and
+`cachycompanion-manager.sh` both auto-detect this layout vs. the self-contained
+`~/cachycompanion` install.sh layout and fall back to `~/.config/cachycompanion/config.json`
+for the live, writable token/settings either way.
+
+Build locally with `makepkg` (add `-si` to also install):
+
+```bash
+makepkg
+```
+
+**This has not been submitted to the AUR yet** — it's here for local testing and review first.
