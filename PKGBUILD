@@ -6,7 +6,8 @@ pkgdesc="Lightweight system monitor + remote task-manager daemon for Arch Linux,
 arch=('any')
 url="https://github.com/C0ldbloodthe0ry/cachycompanion"
 license=('MIT')
-depends=('python' 'python-psutil')
+depends=('bash' 'python' 'python-psutil')
+makedepends=('git')
 optdepends=(
   'qrencode: QR-code pairing with the phone app'
   'android-tools: push/update the companion app on a USB-connected phone'
