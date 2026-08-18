@@ -54,6 +54,8 @@ over SSH on a headless box:
 
 ```bash
 cachycompanion-manager push       # install/update the app on a USB-connected phone, then pair it
+cachycompanion-manager update     # download the latest app build published on GitHub
+cachycompanion-manager fresh      # update + clean reinstall — exactly what a new user gets
 cachycompanion-manager token      # just generate a fresh pairing token (no phone/adb needed)
 cachycompanion-manager port <N>   # change the daemon's listening port (default 5565)
 ```
@@ -62,12 +64,24 @@ Either `push` or `token` writes a fresh token into `config.json`, restarts the d
 QR code made of plain black/white terminal characters (`qrencode -t ANSIUTF8`, bootstrapped on first
 run) — no image viewer or GUI required, so it renders the same over SSH as it does at the desktop. The
 QR payload is `token@port`, so scanning it fills in both fields at once. In the app, tap the **QR
-button** next to the token field and scan it; the raw token and port are also printed as a manual-entry
-fallback.
+button** next to the token field and hold the phone up to the terminal — the scanner reads the code
+live from the camera preview, fills in the token and port, and connects on the spot. The raw token and
+port are also printed as a manual-entry fallback, and if the camera is unavailable (permission denied,
+no camera) the app falls back to photographing the code with the system camera app.
 
 - **`push`:** installs `adb`/USB udev rules on first run if missing (asks for `sudo` once), installs/updates
   `cachycompanion.apk` on the first physical device adb sees, opens an `adb reverse` tunnel on the
   configured port, then runs the token/QR step above and launches the app.
+- **`update`:** downloads the newest `cachycompanion.apk` from this repo's latest GitHub release
+  (falling back to the copy on the `main` branch if no release is published) into
+  `~/.cache/cachycompanion/`, and checks it really is an APK before keeping it. Once fetched, that
+  build is what `push` installs from then on — so a machine that has been running an old local copy
+  ends up on the same version as someone who just cloned the repo. Nothing is sent to the phone by
+  this command, and a failed download leaves the existing APK untouched.
+- **`fresh`:** `update`, then uninstall and reinstall on the phone — a genuinely clean install of the
+  published build, not an upgrade over the top. It wipes the app's saved host/port/token and accent,
+  so it re-pairs from the QR code it prints at the end. Same thing as menu option **4**. Use
+  `push --fresh` to force the clean install without re-downloading.
 - **`token`:** use this when the app is already installed and you just need a new pairing — reconnecting
   over Wi-Fi, or after the token rotated. Point the app at `<pc-ip>:<port>` for LAN, or `127.0.0.1:<port>`
   if reusing an existing USB tunnel (the **USB** button in the app fills in the loopback host without
@@ -80,6 +94,19 @@ fallback.
 Security: the daemon binds LAN-only by default and every control call needs the token. Keep it off the WAN.
 The token rotates every time `cachycompanion-manager` generates one, so any other client using the old one
 (a second phone, a saved bookmark) will need to be re-paired.
+
+## Phone app
+
+Portrait is the full console: connection settings, a text summary, the four graphs, and the
+process list with kill buttons. Turn the phone **sideways** and it switches to a graphs-only
+dashboard — CPU clock, GPU clock, RAM and VRAM on a 2x2 grid, full screen with the system bars
+hidden, text scaled up to be readable from across the room. The RAM and VRAM graphs read
+`used / total` (e.g. `35.8 / 125.7 GB`) in both orientations. Graph history carries across the
+rotation rather than restarting.
+
+Rotation follows the accelerometer even when Android's rotation lock is on, which is the point
+when the phone is parked on a desk. If you'd rather it obey the system lock, turn off
+**"Sideways = graphs only"** under *Keep phone awake*.
 
 ## Packaging (AUR)
 

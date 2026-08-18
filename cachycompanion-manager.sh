@@ -5,10 +5,12 @@
 # terminal characters, no GUI or image viewer needed.
 #
 # Usage:
-#   cachycompanion-manager           interactive menu
-#   cachycompanion-manager push      install/update the app on a USB phone, then pair it
-#   cachycompanion-manager token     generate + show a pairing token (no phone/adb needed)
-#   cachycompanion-manager port <N>  change the daemon's listening port
+#   cachycompanion-manager             interactive menu
+#   cachycompanion-manager push        install/update the app on a USB phone, then pair it
+#   cachycompanion-manager update      fetch the latest published APK from GitHub
+#   cachycompanion-manager fresh       update + clean reinstall: exactly what a new user gets
+#   cachycompanion-manager token       generate + show a pairing token (no phone/adb needed)
+#   cachycompanion-manager port <N>    change the daemon's listening port
 set -e
 # Resolve through the ~/.local/bin symlink installed by install.sh so this
 # still finds its APK/config next to itself when invoked as a bare command.
@@ -28,6 +30,20 @@ else
   CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/cachycompanion/config.json"
 fi
 
+# 'update' downloads into a user-writable cache, so it works the same whether this
+# script came from install.sh or from a distro package with a read-only /usr/share.
+REPO="C0ldbloodthe0ry/cachycompanion"
+RAW_URL="https://raw.githubusercontent.com/$REPO/main/cachycompanion.apk"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/cachycompanion"
+CACHE_APK="$CACHE_DIR/cachycompanion.apk"
+CACHE_VER="$CACHE_DIR/cachycompanion.apk.version"
+
+# Once fetched, the GitHub build wins over whatever shipped next to the script, so
+# 'push' keeps installing what a new user downloading the repo would get.
+if [ -f "$CACHE_APK" ] && [ "$CACHE_APK" -nt "$APK" ]; then
+  APK="$CACHE_APK"
+fi
+
 [ -f "$CONFIG" ] || { mkdir -p "$(dirname "$CONFIG")"; cp "$EXAMPLE" "$CONFIG"; }
 
 current_port() {
@@ -35,11 +51,14 @@ current_port() {
 }
 
 usage() {
-  echo "Usage: cachycompanion-manager [push|token|port <N>]"
-  echo "  push     install/update the app on a USB-connected phone, then pair it"
-  echo "  token    generate a fresh pairing token and show its QR (no phone/adb needed)"
-  echo "  port <N> change the daemon's listening port (default 5565)"
-  echo "  (no argument) interactive menu"
+  echo "Usage: cachycompanion-manager [push [--fresh]|update|fresh|token|port <N>]"
+  echo "  push [--fresh]  install/update the app on a USB-connected phone, then pair it"
+  echo "                  (--fresh uninstalls first, wiping the app's saved host/token)"
+  echo "  update          download the latest APK published on GitHub (no phone needed)"
+  echo "  fresh           update, then clean-install it: what a new user gets from GitHub"
+  echo "  token           generate a fresh pairing token and show its QR (no phone/adb needed)"
+  echo "  port <N>        change the daemon's listening port (default 5565)"
+  echo "  (no argument)   interactive menu"
 }
 
 set_port() {
@@ -64,6 +83,69 @@ PYEOF
   sleep 1
   echo ">> daemon now listening on :$new_port"
   echo ">> run 'cachycompanion-manager token' (or 'push') next so the phone re-pairs on the new port"
+}
+
+http_get() {
+  # python3 is already a hard dependency of this script, so no curl/wget needed.
+  python3 - "$1" "$2" <<'PYEOF'
+import shutil, sys, urllib.request
+req = urllib.request.Request(sys.argv[1], headers={"User-Agent": "cachycompanion-manager"})
+with urllib.request.urlopen(req, timeout=60) as resp, open(sys.argv[2], "wb") as out:
+    shutil.copyfileobj(resp, out)
+PYEOF
+}
+
+latest_release() {
+  # prints "<tag>\n<apk url>" for the newest release, or fails if there isn't one
+  python3 - "$REPO" <<'PYEOF'
+import json, sys, urllib.request
+req = urllib.request.Request(
+    "https://api.github.com/repos/%s/releases/latest" % sys.argv[1],
+    headers={"User-Agent": "cachycompanion-manager",
+             "Accept": "application/vnd.github+json"})
+try:
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        rel = json.load(resp)
+except Exception:
+    sys.exit(1)
+apk = next((a for a in rel.get("assets", []) if a.get("name", "").endswith(".apk")), None)
+if not apk:
+    sys.exit(1)
+print(rel.get("tag_name", "latest"))
+print(apk["browser_download_url"])
+PYEOF
+}
+
+update_apk() {
+  mkdir -p "$CACHE_DIR"
+  local tag url tmp info
+  echo ">> checking github.com/$REPO for the latest app build"
+  if info="$(latest_release)"; then
+    tag="$(printf '%s\n' "$info" | sed -n 1p)"
+    url="$(printf '%s\n' "$info" | sed -n 2p)"
+    echo ">> latest release: $tag"
+  else
+    tag="main"
+    url="$RAW_URL"
+    echo ">> no release published (or GitHub unreachable) — taking the APK off the main branch"
+  fi
+
+  tmp="$CACHE_APK.part"
+  if ! http_get "$url" "$tmp"; then
+    rm -f "$tmp"
+    echo "!! download failed — keeping the APK already on disk"
+    exit 1
+  fi
+  # A redirect to an HTML error page would download happily; every APK is a zip.
+  if [ "$(head -c 2 "$tmp" 2>/dev/null)" != "PK" ] || [ "$(stat -c%s "$tmp")" -lt 500000 ]; then
+    rm -f "$tmp"
+    echo "!! what came back isn't an APK — keeping the one already on disk"
+    exit 1
+  fi
+  mv "$tmp" "$CACHE_APK"
+  printf '%s\n' "$tag" > "$CACHE_VER"
+  APK="$CACHE_APK"
+  echo ">> got $(du -h "$CACHE_APK" | cut -f1) — $CACHE_APK ($tag)"
 }
 
 ensure_qrencode() {
@@ -93,12 +175,15 @@ PYEOF
   echo
   qrencode -t ANSIUTF8 -m 2 "${TOKEN}@${PORT}"
   echo
-  echo ">> In the app: tap the QR button next to the token field and scan the code above."
-  echo "   (the code carries both the token and port :$PORT — the app fills in both fields)"
+  echo ">> In the app: tap the QR button next to the token field, then hold the phone up"
+  echo "   to the code above — the scanner reads it live, no shutter button."
+  echo "   (the code carries both the token and port :$PORT — the app fills in both fields"
+  echo "    and connects straight away)"
   echo ">> manual-entry fallback — token: $TOKEN   port: $PORT"
 }
 
 push_to_phone() {
+  local fresh="${1:-}"
   # Fresh Arch-based installs don't ship adb or the udev rules that let a
   # non-root user touch the phone over USB. Bootstrap both on first run.
   if ! command -v adb >/dev/null 2>&1 || ! pacman -Qq android-udev >/dev/null 2>&1; then
@@ -126,7 +211,16 @@ push_to_phone() {
   export ANDROID_SERIAL="$TARGET"
   echo ">> target: $ANDROID_SERIAL"
 
-  echo ">> installing"
+  if [ "$fresh" = "fresh" ]; then
+    echo ">> clean install: removing the existing copy first (wipes its saved host/token/theme)"
+    adb uninstall net.wokeovis.cachycompanion >/dev/null 2>&1 || true
+  fi
+
+  if [ "$APK" = "$CACHE_APK" ]; then
+    echo ">> installing the github build ($(cat "$CACHE_VER" 2>/dev/null || echo latest))"
+  else
+    echo ">> installing the APK shipped with this script"
+  fi
   if ! adb install -r "$APK" 2>&1 | tail -1 | grep -q Success; then
     echo ">> signature mismatch or bad state, reinstalling clean"
     adb uninstall net.wokeovis.cachycompanion >/dev/null 2>&1 || true
@@ -143,7 +237,19 @@ push_to_phone() {
 
 case "${1:-}" in
   push)
-    push_to_phone
+    case "${2:-}" in
+      --fresh|fresh) push_to_phone fresh ;;
+      "") push_to_phone ;;
+      *) echo "!! unknown option: $2"; usage; exit 1 ;;
+    esac
+    ;;
+  update)
+    update_apk
+    echo ">> run 'cachycompanion-manager push' to put it on the phone"
+    ;;
+  fresh)
+    update_apk
+    push_to_phone fresh
     ;;
   token)
     gen_token_and_show_qr
@@ -161,12 +267,14 @@ case "${1:-}" in
     echo "1) Push app to phone (enable USB debugging first, then plug it in)"
     echo "2) Generate QR token only (app already installed, pairing over LAN or reusing USB)"
     echo "3) Set a custom port"
-    echo "4) Quit"
+    echo "4) Fresh install from GitHub (download the latest app, wipe + reinstall, pair)"
+    echo "5) Quit"
     read -r -p "> " choice
     case "$choice" in
       1) push_to_phone ;;
       2) gen_token_and_show_qr ;;
       3) read -r -p "new port: " newport; set_port "$newport" ;;
+      4) update_apk; push_to_phone fresh ;;
       *) exit 0 ;;
     esac
     read -n 1 -s -r -p "Press any key to close..." || true
