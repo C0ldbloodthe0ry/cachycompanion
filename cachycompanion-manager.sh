@@ -33,7 +33,7 @@ fi
 # 'update' downloads into a user-writable cache, so it works the same whether this
 # script came from install.sh or from a distro package with a read-only /usr/share.
 REPO="C0ldbloodthe0ry/cachycompanion"
-RAW_URL="https://raw.githubusercontent.com/$REPO/main/cachycompanion.apk"
+RAW_URL="https://raw.githubusercontent.com/$REPO/master/cachycompanion.apk"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/cachycompanion"
 CACHE_APK="$CACHE_DIR/cachycompanion.apk"
 CACHE_VER="$CACHE_DIR/cachycompanion.apk.version"
@@ -127,7 +127,7 @@ update_apk() {
   else
     tag="main"
     url="$RAW_URL"
-    echo ">> no release published (or GitHub unreachable) — taking the APK off the main branch"
+    echo ">> no release published (or GitHub unreachable) — taking the APK off the master branch"
   fi
 
   tmp="$CACHE_APK.part"

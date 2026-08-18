@@ -73,7 +73,7 @@ no camera) the app falls back to photographing the code with the system camera a
   `cachycompanion.apk` on the first physical device adb sees, opens an `adb reverse` tunnel on the
   configured port, then runs the token/QR step above and launches the app.
 - **`update`:** downloads the newest `cachycompanion.apk` from this repo's latest GitHub release
-  (falling back to the copy on the `main` branch if no release is published) into
+  (falling back to the copy on the `master` branch if no release is published) into
   `~/.cache/cachycompanion/`, and checks it really is an APK before keeping it. Once fetched, that
   build is what `push` installs from then on — so a machine that has been running an old local copy
   ends up on the same version as someone who just cloned the repo. Nothing is sent to the phone by
