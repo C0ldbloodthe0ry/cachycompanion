@@ -3,7 +3,7 @@
 Lightweight system monitor + remote task-manager for **Arch Linux and derivatives**
 (CachyOS, EndeavourOS, Manjaro, plain Arch, ...) and most other systemd Linux boxes.
 A tiny Python daemon serves live CPU/GPU/RAM stats and a token-gated process-kill endpoint;
-the Android app (`net.wokeovis.cachycompanion`) shows graphs and lets you kill PC processes from your phone.
+the Android app (`net.zer0prophet.cachycompanion`) shows graphs and lets you kill PC processes from your phone.
 
 **Hardware support:** AMD is what this is actually developed and daily-driven on (Ryzen +
 amdgpu). CPU-side, Intel is also covered — `psutil` and the temp-sensor lookup (`coretemp`)

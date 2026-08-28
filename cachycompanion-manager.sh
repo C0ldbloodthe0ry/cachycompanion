@@ -213,7 +213,7 @@ push_to_phone() {
 
   if [ "$fresh" = "fresh" ]; then
     echo ">> clean install: removing the existing copy first (wipes its saved host/token/theme)"
-    adb uninstall net.wokeovis.cachycompanion >/dev/null 2>&1 || true
+    adb uninstall net.zer0prophet.cachycompanion >/dev/null 2>&1 || true
   fi
 
   if [ "$APK" = "$CACHE_APK" ]; then
@@ -223,7 +223,7 @@ push_to_phone() {
   fi
   if ! adb install -r "$APK" 2>&1 | tail -1 | grep -q Success; then
     echo ">> signature mismatch or bad state, reinstalling clean"
-    adb uninstall net.wokeovis.cachycompanion >/dev/null 2>&1 || true
+    adb uninstall net.zer0prophet.cachycompanion >/dev/null 2>&1 || true
     adb install "$APK" | tail -1
   fi
   PORT="$(current_port)"
@@ -231,7 +231,7 @@ push_to_phone() {
 
   gen_token_and_show_qr
 
-  echo ">> launching"; adb shell monkey -p net.wokeovis.cachycompanion -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+  echo ">> launching"; adb shell monkey -p net.zer0prophet.cachycompanion -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
   echo ">> done. In the app, tap USB (127.0.0.1:$PORT) if host/port didn't autofill."
 }
 
